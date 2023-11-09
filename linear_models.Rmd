@@ -3,6 +3,8 @@ title: "linear_models"
 author: "Sitian Zhou"
 date: "2023-11-09"
 output: github_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 
@@ -79,14 +81,123 @@ fit |>
 diagnostics
 
 ```{r}
+nyc_airbnb |> 
+  modelr::add_residuals(fit) |> 
+  ggplot(aes(x= borough, y = resid)) + 
+  geom_violin()
+
+nyc_airbnb |> 
+  modelr::add_residuals(fit) |> 
+  ggplot(aes(x= stars, y = resid)) + 
+  geom_point()
+```
 
 
+hypothesis testing for categorical predictor
+
+```{r}
+fit |> 
+  broom::tidy()
+
+fit_null = lm(price ~ stars + borough, data = nyc_airbnb)
+fit_alt = lm(price ~ stars + borough + room_type, data = nyc_airbnb)
+
+anova(fit_null, fit_alt) |> 
+  broom::tidy()
+
+```
+
+
+Borough-level differences
+
+```{r}
+fit = 
+  nyc_airbnb |> 
+  lm(price ~ stars * borough + room_type * borough, data = _)
+
+fit |> 
+  broom::tidy()
+```
+
+```{r}
+airbnb_lm = function(df) {
+  lm(price ~ stars + room_type, data = df)
+}
+
+nyc_airbnb |> 
+  nest(df = -borough) |> # nest everything except borough
+  mutate(
+    model = map(df, airbnb_lm),
+    results = map(model, broom::tidy)
+  ) |> 
+  select(borough, results) |> 
+  unnest(results) |> 
+  select(borough, term, estimate) |> 
+  pivot_wider(
+    names_from = term, 
+    values_from = estimate
+  ) |> 
+  knitr::kable(digits = 2)
 ```
 
 
 ```{r}
-
+nyc_airbnb |> 
+  nest(df = -borough) |> # nest everything except borough
+  mutate(
+    model = map(df, \(df) lm(price ~ stars + room_type, data = df)), # mimic a function
+    results = map(model, broom::tidy)
+  ) |> 
+  select(borough, results) |> 
+  unnest(results) |> 
+  select(borough, term, estimate) |> 
+  pivot_wider(
+    names_from = term, 
+    values_from = estimate
+  ) |> 
+  knitr::kable(digits = 2)
 ```
+
+
+homicides in Baltimore
+
+```{r}
+baltimore_df <-
+  read_csv("data/homicide-data.csv") |> 
+  filter(city == "Baltimore") |> 
+  mutate(
+    resolved = as.numeric(disposition == "Closed by arrest"),
+    victim_age = as.numeric(victim_age)
+  ) |> 
+  select(resolved, victim_age, victim_race, victim_sex)
+```
+
+fitting a logistic regression
+
+```{r}
+fit_logistic = 
+  baltimore_df |> 
+  glm(resolved ~ victim_age + victim_race + victim_sex,
+      data = _,
+      family = binomial())
+```
+
+
+look at model results
+
+```{r}
+fit_logistic |> 
+  broom::tidy() |> 
+  mutate(OR = exp(estimate)) |> 
+  select(term, estimate, OR)
+```
+
+
+```{r}
+baltimore_df |> 
+  count(victim_race)
+```
+
 
 
 
