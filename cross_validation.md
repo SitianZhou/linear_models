@@ -1,23 +1,31 @@
----
-title: "cross_validation"
-author: "Sitian Zhou"
-date: "2023-11-14"
-output: github_document
-editor_options: 
-  chunk_output_type: console
----
+cross_validation
+================
+Sitian Zhou
+2023-11-14
 
-
-```{r}
+``` r
 library(tidyverse)
+```
+
+    ## ── Attaching core tidyverse packages ──────────────────────── tidyverse 2.0.0 ──
+    ## ✔ dplyr     1.1.3     ✔ readr     2.1.4
+    ## ✔ forcats   1.0.0     ✔ stringr   1.5.0
+    ## ✔ ggplot2   3.4.3     ✔ tibble    3.2.1
+    ## ✔ lubridate 1.9.2     ✔ tidyr     1.3.0
+    ## ✔ purrr     1.0.2     
+    ## ── Conflicts ────────────────────────────────────────── tidyverse_conflicts() ──
+    ## ✖ dplyr::filter() masks stats::filter()
+    ## ✖ dplyr::lag()    masks stats::lag()
+    ## ℹ Use the conflicted package (<http://conflicted.r-lib.org/>) to force all conflicts to become errors
+
+``` r
 library(modelr)
 set.seed(1)
 ```
 
-
 ## Nonlinear data and CV
 
-```{r}
+``` r
 nonlin_df <-
   tibble(
     id = 1:100,
@@ -29,34 +37,33 @@ nonlin_df |>
   ggplot(aes(x = x, y = y)) + geom_point()
 ```
 
+![](cross_validation_files/figure-gfm/unnamed-chunk-2-1.png)<!-- -->
+
 Do the train / test split
 
-
-```{r}
+``` r
 train_df <- sample_n(nonlin_df, 80)
 test_df <- anti_join(nonlin_df, train_df, by = "id")
 ```
 
-
-```{r}
+``` r
 train_df |> 
   ggplot(aes(x = x, y = y)) +
   geom_point() +
   geom_point(data = test_df, color = "red")
 ```
 
+![](cross_validation_files/figure-gfm/unnamed-chunk-4-1.png)<!-- -->
 
-
-```{r}
+``` r
 linear_mod = lm(y ~ x, data = train_df)
 smooth_mod = mgcv::gam(y ~ s(x), data = train_df)
 wiggly_mod = mgcv::gam(y ~ s(x, k = 30), sp = 10e-6, data = train_df)
 ```
 
-
 quick visualization of the linear model
 
-```{r}
+``` r
 train_df |> 
   add_predictions(wiggly_mod) |> 
   ggplot(aes(x = x, y = y)) + 
@@ -64,25 +71,49 @@ train_df |>
   geom_line(aes(y = pred))
 ```
 
+![](cross_validation_files/figure-gfm/unnamed-chunk-6-1.png)<!-- -->
+
 RMSEs on training data can be misleading
 
-```{r}
+``` r
 rmse(linear_mod, train_df)
+```
+
+    ## [1] 0.7178747
+
+``` r
 rmse(smooth_mod, train_df)
+```
+
+    ## [1] 0.2874834
+
+``` r
 rmse(wiggly_mod, train_df)
 ```
 
+    ## [1] 0.2498309
 
-```{r}
+``` r
 rmse(linear_mod, test_df)
-rmse(smooth_mod, test_df)
-rmse(wiggly_mod, test_df)
-
 ```
+
+    ## [1] 0.7052956
+
+``` r
+rmse(smooth_mod, test_df)
+```
+
+    ## [1] 0.2221774
+
+``` r
+rmse(wiggly_mod, test_df)
+```
+
+    ## [1] 0.289051
 
 ## Use modelr for CV
 
-```{r}
+``` r
 cv_df <-
   nonlin_df |> 
   crossv_mc(n = 100) |> 
@@ -92,14 +123,29 @@ cv_df <-
   )
 ```
 
-
-```{r}
+``` r
 cv_df |> pull(train) |> nth(3) |> as_tibble()
 ```
 
-Apply each model to all training datasets and evaluate on all testing datasets
+    ## # A tibble: 79 × 3
+    ##       id     x      y
+    ##    <int> <dbl>  <dbl>
+    ##  1     1 0.266  1.11 
+    ##  2     2 0.372  0.764
+    ##  3     3 0.573  0.358
+    ##  4     4 0.908 -3.04 
+    ##  5     5 0.202  1.33 
+    ##  6     6 0.898 -1.99 
+    ##  7     7 0.945 -3.27 
+    ##  8    11 0.206  1.63 
+    ##  9    12 0.177  0.836
+    ## 10    13 0.687 -0.291
+    ## # ℹ 69 more rows
 
-```{r}
+Apply each model to all training datasets and evaluate on all testing
+datasets
+
+``` r
 cv_results = 
   cv_df |> 
   mutate(
@@ -114,7 +160,7 @@ cv_results =
   )
 ```
 
-```{r}
+``` r
 cv_results |> 
   select(starts_with("rmse")) |> 
   pivot_longer(
@@ -127,5 +173,4 @@ cv_results |>
   geom_violin()
 ```
 
-
-
+![](cross_validation_files/figure-gfm/unnamed-chunk-12-1.png)<!-- -->
