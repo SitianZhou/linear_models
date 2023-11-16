@@ -105,7 +105,7 @@ sim_df_nonconst |>
 
 ``` r
 boot_straps = 
-  tibble(strap_number = 1:100) |> 
+  tibble(strap_number = 1:1000) |> 
   mutate(
     strap_sample = map(strap_number, \(i) boot_sample(sim_df_nonconst))
   )
@@ -141,3 +141,108 @@ boot_results =
   select(strap_number, results) |> 
   unnest(results)
 ```
+
+try to summarize these reslults – get a bootstrap SE
+
+``` r
+boot_results |> 
+  group_by(term) |> 
+  summarize(
+    se = sd(estimate)
+  )
+```
+
+    ## # A tibble: 2 × 2
+    ##   term            se
+    ##   <chr>        <dbl>
+    ## 1 (Intercept) 0.0747
+    ## 2 x           0.101
+
+look at the distribution
+
+``` r
+boot_results |> 
+  filter(term == "x") |> 
+  ggplot(aes(x = estimate)) +
+  geom_density()
+```
+
+![](bootstrapping_files/figure-gfm/unnamed-chunk-9-1.png)<!-- -->
+
+construct a CI
+
+``` r
+boot_results |> 
+  group_by(term) |> 
+  summarize(
+    ci_lower = quantile(estimate, 0.025),
+    ci_upper = quantile(estimate, 0.975)
+  )
+```
+
+    ## # A tibble: 2 × 3
+    ##   term        ci_lower ci_upper
+    ##   <chr>          <dbl>    <dbl>
+    ## 1 (Intercept)     1.79     2.08
+    ## 2 x               2.91     3.31
+
+## Airbnb
+
+``` r
+data("nyc_airbnb")
+nyc_airbnb <-
+  nyc_airbnb |> 
+  mutate(stars = review_scores_location / 2) |> 
+  rename(
+    borough = neighbourhood_group
+  ) |> 
+  filter(borough != "Staten Island") |> 
+  drop_na(price, stars) |> 
+  select(price, stars, room_type, borough)
+```
+
+fit a regression of `price` on other variables and look at residuals
+
+``` r
+airbnb_fit = 
+  nyc_airbnb |> 
+  lm(price ~ stars + room_type + borough, data = _)
+```
+
+residuals
+
+``` r
+nyc_airbnb |> 
+  add_residuals(airbnb_fit) |> 
+  ggplot(aes(stars, resid)) + 
+  geom_point()
+```
+
+![](bootstrapping_files/figure-gfm/unnamed-chunk-13-1.png)<!-- -->
+
+run a bootstrap on this whole thing to get estimates for the effect of
+`stars` on `price`
+
+``` r
+manhattan_df <-
+  nyc_airbnb |> 
+  filter(borough == "Manhattan")
+
+
+boot_results = 
+  tibble(strap_number = 1:1000) |> 
+  mutate(
+    strap_sample = map(strap_number, \(i) boot_sample(manhattan_df)),
+    models = map(strap_sample, \(df) lm(price ~ stars + room_type, data = df)),
+    results = map(models, broom::tidy)
+  ) |> 
+  select(strap_number, results) |> 
+  unnest(results)
+
+boot_results |> 
+  filter(term == "stars") |> 
+  ggplot(aes(x = estimate)) +
+  geom_density()
+```
+
+![](bootstrapping_files/figure-gfm/unnamed-chunk-14-1.png)<!-- -->
