@@ -1,0 +1,114 @@
+---
+title: "bootstrapping"
+author: "Sitian Zhou"
+date: "2023-11-14"
+output: github_document
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r}
+library(tidyverse)
+library(p8105.datasets)
+library(modelr)
+set.seed(1)
+```
+
+
+## Generate a relevant example
+
+```{r}
+n_samp = 250
+
+sim_df_const = 
+  tibble(
+    x = rnorm(n_samp, 1, 1),
+    error = rnorm(n_samp, 0, 1),
+    y = 2 + 3 * x + error
+  )
+
+sim_df_nonconst =
+  sim_df_const |> 
+  mutate(
+    error = error * 0.75 * x,
+    y = 2 + 3 * x + error
+  )
+
+
+sim_df_const |> 
+  ggplot(aes(x, y)) + geom_point()
+
+sim_df_nonconst |> 
+  ggplot(aes(x, y)) + geom_point()
+
+```
+
+
+```{r}
+sim_df_const |> 
+  lm(y ~ x, data = _) |> 
+  broom::tidy()
+
+sim_df_nonconst |> 
+  lm(y ~ x, data = _) |> 
+  broom::tidy()
+```
+
+
+## Draw and analyze a bootstrap sample
+
+```{r}
+boot_sample = function(df) {
+  sample_frac(df, replace = TRUE)
+}
+```
+
+
+```{r}
+sim_df_nonconst |> 
+  boot_sample() |> 
+  ggplot(aes(x, y)) + 
+  geom_point(alpha = 0.5) +
+  stat_smooth(method = "lm")
+```
+
+
+## Draw a lot of samples and analyze them
+```{r}
+boot_straps = 
+  tibble(strap_number = 1:100) |> 
+  mutate(
+    strap_sample = map(strap_number, \(i) boot_sample(sim_df_nonconst))
+  )
+
+boot_straps |> 
+  pull(strap_sample) |> 
+  nth(1) |> 
+  arrange(x)
+```
+
+
+```{r}
+boot_results = 
+  boot_straps |> 
+  mutate(
+    models = map(strap_sample, \(df) lm(y ~ x, data = df)),
+    results = map(models, broom::tidy)
+  ) |> 
+  select(strap_number, results) |> 
+  unnest(results)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
